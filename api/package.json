@@ -1,0 +1,20 @@
+{
+  "name": "pixora-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/**/*.test.js",
+    "start": "func start",
+    "start:node": "node --enable-source-maps dist/index.js"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3"
+  }
+}
