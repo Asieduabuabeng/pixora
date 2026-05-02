@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "npm run build && node --test dist/tests/**/*.test.js",
     "start": "func start",
-    "start:node": "node --enable-source-maps dist/index.js"
+    "start:node": "node --enable-source-maps dist/index.js",
+    "deploy": "npm run build && func azure functionapp publish pixora-api-asiedu001 --typescript"
   },
   "dependencies": {
     "@azure/functions": "^4.8.0"

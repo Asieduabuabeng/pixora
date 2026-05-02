@@ -5,6 +5,8 @@
 - Demo MUST be from deployed/live Azure version (not local).
 - If demo is not from live deployment, risk of losing 10 marks.
 
+**Live URLs (record these for your demo):** see **`AZURE_DEPLOYMENT_RECORD.md`** — frontend `https://pixorastgasiedu001.z28.web.core.windows.net/`, API `https://pixora-api-asiedu001.azurewebsites.net/api`.
+
 ## Video structure (recommended flow)
 
 1. Introduction

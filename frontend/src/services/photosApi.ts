@@ -1,4 +1,11 @@
-import type { CommentItem, NewPhotoInput, Photo } from '../types'
+import type { CommentItem, NewPhotoInput, Photo, Role } from '../types'
+
+/** Required for write calls when using the live API; encodes role + user for server checks. */
+export interface PixoraClientContext {
+  role: Role
+  userId: string
+  displayName: string
+}
 
 interface ApiPhoto {
   id: string
@@ -72,6 +79,99 @@ const samplePhotos: Photo[] = [
     commentsCount: 1,
     comments: [{ author: 'Elena', text: 'This feels cinematic.' }],
   },
+  {
+    id: 3,
+    apiId: 'p_003',
+    title: 'Coastal Dawn',
+    caption: 'Empty beach at sunrise before the crowds.',
+    location: 'Algarve, Portugal',
+    creatorName: 'Sofia Reyes',
+    people: '',
+    tags: ['travel', 'ocean'],
+    aiTags: ['travel', 'nature'],
+    placeholder: '🌊',
+    imageUrl:
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
+    likes: 18,
+    rating: 4.5,
+    commentsCount: 0,
+    comments: [],
+  },
+  {
+    id: 4,
+    apiId: 'p_004',
+    title: 'Morning Brew',
+    caption: 'Espresso and pastries at a quiet corner café.',
+    location: 'Istanbul, Türkiye',
+    creatorName: 'Amir Hassan',
+    people: 'Sam',
+    tags: ['food', 'coffee'],
+    aiTags: ['food'],
+    placeholder: '☕',
+    imageUrl:
+      'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=80',
+    likes: 42,
+    rating: 4.8,
+    commentsCount: 2,
+    comments: [
+      { author: 'Priya', text: 'Now I want breakfast.' },
+      { author: 'Leo', text: 'That foam looks perfect.' },
+    ],
+  },
+  {
+    id: 5,
+    apiId: 'p_005',
+    title: 'Studio Portrait',
+    caption: 'Soft light portrait session — minimal backdrop.',
+    location: 'New York, USA',
+    creatorName: 'Jordan Lee',
+    people: 'Dana',
+    tags: ['portrait', 'people'],
+    aiTags: ['people'],
+    placeholder: '👤',
+    imageUrl:
+      'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=1200&q=80',
+    likes: 55,
+    rating: 4.7,
+    commentsCount: 1,
+    comments: [{ author: 'Alex', text: 'Beautiful tones.' }],
+  },
+  {
+    id: 6,
+    apiId: 'p_006',
+    title: 'Harbor Night',
+    caption: 'Reflections on the water after rain.',
+    location: 'Copenhagen, Denmark',
+    creatorName: 'Nina Petrova',
+    people: '',
+    tags: ['urban', 'harbor'],
+    aiTags: ['urban', 'nighttime'],
+    placeholder: '🌉',
+    imageUrl:
+      'https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&w=1200&q=80',
+    likes: 27,
+    rating: 4.4,
+    commentsCount: 0,
+    comments: [],
+  },
+  {
+    id: 7,
+    apiId: 'p_007',
+    title: 'Trail Run',
+    caption: 'Dirt path through pine trees — early workout.',
+    location: 'Boulder, USA',
+    creatorName: 'Chris Adebayo',
+    people: 'Running club',
+    tags: ['sport', 'trail'],
+    aiTags: ['nature', 'sport'],
+    placeholder: '🏃',
+    imageUrl:
+      'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80',
+    likes: 14,
+    rating: 4.3,
+    commentsCount: 1,
+    comments: [{ author: 'River', text: 'Wish I was on this trail.' }],
+  },
 ]
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
@@ -120,6 +220,21 @@ function getApiPhotoId(photo: Photo): string {
   return photo.apiId ?? `p_${photo.id}`
 }
 
+function mutatingHeaders(
+  contentType: string | undefined,
+  ctx: PixoraClientContext,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    'X-Pixora-Role': ctx.role,
+    'X-Pixora-User-Id': ctx.userId,
+    'X-Pixora-Display-Name': ctx.displayName,
+  }
+  if (contentType) {
+    headers['Content-Type'] = contentType
+  }
+  return headers
+}
+
 export async function listPhotos(): Promise<Photo[]> {
   if (!API_BASE_URL) {
     return Promise.resolve(samplePhotos)
@@ -134,14 +249,17 @@ export async function listPhotos(): Promise<Photo[]> {
   return data.items.map(toUiPhoto)
 }
 
-export async function uploadPhoto(input: NewPhotoInput): Promise<Photo> {
+export async function uploadPhoto(
+  input: NewPhotoInput,
+  ctx: PixoraClientContext,
+): Promise<Photo> {
   if (!API_BASE_URL) {
     return Promise.resolve({
       id: Date.now(),
       ...input,
-      creatorName: 'You',
+      creatorName: input.creatorName ?? 'You',
       tags: [],
-      aiTags: ['pending-ai-tagging'],
+      aiTags: ['sample'],
       placeholder: '📷',
       imageUrl: undefined,
       likes: 0,
@@ -151,10 +269,15 @@ export async function uploadPhoto(input: NewPhotoInput): Promise<Photo> {
     })
   }
 
+  const body = {
+    ...input,
+    creatorName: input.creatorName ?? ctx.displayName,
+  }
+
   const response = await fetch(`${API_BASE_URL}/photos`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    headers: mutatingHeaders('application/json', ctx),
+    body: JSON.stringify(body),
   })
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, 'Failed to upload photo'))
@@ -181,6 +304,7 @@ export async function createPhotoComment(
   photo: Photo,
   text: string,
   fallbackAuthor: string,
+  ctx: PixoraClientContext,
 ): Promise<CommentItem[]> {
   if (!API_BASE_URL) {
     return Promise.resolve([...photo.comments, { author: fallbackAuthor, text }])
@@ -188,7 +312,7 @@ export async function createPhotoComment(
 
   const response = await fetch(`${API_BASE_URL}/photos/${encodeURIComponent(getApiPhotoId(photo))}/comments`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mutatingHeaders('application/json', ctx),
     body: JSON.stringify({ text }),
   })
   if (!response.ok) {
@@ -199,7 +323,10 @@ export async function createPhotoComment(
   return data.items
 }
 
-export async function likePhoto(photo: Photo): Promise<{ liked: boolean; likes: number }> {
+export async function likePhoto(
+  photo: Photo,
+  ctx: PixoraClientContext,
+): Promise<{ liked: boolean; likes: number }> {
   if (!API_BASE_URL) {
     return Promise.resolve({
       liked: true,
@@ -209,6 +336,7 @@ export async function likePhoto(photo: Photo): Promise<{ liked: boolean; likes: 
 
   const response = await fetch(`${API_BASE_URL}/photos/${encodeURIComponent(getApiPhotoId(photo))}/like`, {
     method: 'POST',
+    headers: mutatingHeaders(undefined, ctx),
   })
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, 'Failed to like photo'))
@@ -218,7 +346,10 @@ export async function likePhoto(photo: Photo): Promise<{ liked: boolean; likes: 
   return { liked: data.liked, likes: data.likesCount }
 }
 
-export async function unlikePhoto(photo: Photo): Promise<{ liked: boolean; likes: number }> {
+export async function unlikePhoto(
+  photo: Photo,
+  ctx: PixoraClientContext,
+): Promise<{ liked: boolean; likes: number }> {
   if (!API_BASE_URL) {
     return Promise.resolve({
       liked: false,
@@ -228,6 +359,7 @@ export async function unlikePhoto(photo: Photo): Promise<{ liked: boolean; likes
 
   const response = await fetch(`${API_BASE_URL}/photos/${encodeURIComponent(getApiPhotoId(photo))}/like`, {
     method: 'DELETE',
+    headers: mutatingHeaders(undefined, ctx),
   })
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, 'Failed to unlike photo'))
@@ -237,14 +369,18 @@ export async function unlikePhoto(photo: Photo): Promise<{ liked: boolean; likes
   return { liked: data.liked, likes: data.likesCount }
 }
 
-export async function ratePhotoApi(photo: Photo, rating: number): Promise<number> {
+export async function ratePhotoApi(
+  photo: Photo,
+  rating: number,
+  ctx: PixoraClientContext,
+): Promise<number> {
   if (!API_BASE_URL) {
     return Promise.resolve(rating)
   }
 
   const response = await fetch(`${API_BASE_URL}/photos/${encodeURIComponent(getApiPhotoId(photo))}/rating`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: mutatingHeaders('application/json', ctx),
     body: JSON.stringify({ rating }),
   })
   if (!response.ok) {

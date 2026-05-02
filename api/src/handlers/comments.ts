@@ -5,7 +5,8 @@ import type {
 } from '@azure/functions'
 import { photoStore } from '../data/photoStore.js'
 import type { CreateCommentRequest } from '../domain/types.js'
-import { badRequest, jsonResponse, notFound } from '../lib/http.js'
+import { badRequest, forbidden, jsonResponse, notFound } from '../lib/http.js'
+import { getPixoraDisplayName, getPixoraRole } from '../lib/securityHeaders.js'
 import { validateCommentText } from '../lib/validation.js'
 
 export async function getCommentsHandler(
@@ -27,6 +28,12 @@ export async function createCommentHandler(
   const photoId = request.params.photoId
   context.log(`POST /photos/${photoId}/comments called`)
 
+  if (getPixoraRole(request) !== 'consumer') {
+    return forbidden(
+      'Comments require the consumer role. Send header X-Pixora-Role: consumer.',
+    )
+  }
+
   let payload: CreateCommentRequest
   try {
     payload = (await request.json()) as CreateCommentRequest
@@ -37,7 +44,8 @@ export async function createCommentHandler(
   const { value: text, error } = validateCommentText(payload.text)
   if (error || !text) return badRequest(error ?? 'text is required.')
 
-  const updated = photoStore.addComment(photoId, { author: 'Consumer Demo', text })
+  const display = getPixoraDisplayName(request)?.trim() || 'Consumer'
+  const updated = photoStore.addComment(photoId, { author: display, text })
   if (!updated) return notFound('Photo not found.')
   return jsonResponse(201, { items: updated.comments, commentsCount: updated.commentsCount })
 }

@@ -37,6 +37,18 @@ test('DELETE like behavior is idempotent', () => {
   assert.equal(removedAgain.likesCount, 24)
 })
 
+test('createPhoto assigns lightweight AI tags from metadata text', () => {
+  const store = new PhotoStore()
+  const photo = store.createPhoto({
+    title: 'Sunrise hike',
+    caption: 'Forest path and mountain view',
+    location: 'Alps',
+    imageUrl: 'https://example.com/1.jpg',
+  })
+  assert.ok(photo.aiTags.length > 0)
+  assert.ok(photo.aiTags.includes('nature'))
+})
+
 test('putRating updates average and count by unique user', () => {
   const store = new PhotoStore()
   const photoId = 'p_001'

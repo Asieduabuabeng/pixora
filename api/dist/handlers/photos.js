@@ -1,5 +1,6 @@
 import { photoStore } from '../data/photoStore.js';
-import { badRequest, jsonResponse, notFound } from '../lib/http.js';
+import { badRequest, forbidden, jsonResponse, notFound } from '../lib/http.js';
+import { getPixoraRole } from '../lib/securityHeaders.js';
 import { assertMaxLength, parseSafeLimit } from '../lib/validation.js';
 export async function getPhotosHandler(request, context) {
     context.log(`GET /photos called: ${request.url}`);
@@ -22,6 +23,9 @@ export async function getPhotoByIdHandler(request, context) {
 }
 export async function createPhotoHandler(request, context) {
     context.log(`POST /photos called: ${request.url}`);
+    if (getPixoraRole(request) !== 'creator') {
+        return forbidden('Uploads require the creator role. Send header X-Pixora-Role: creator.');
+    }
     let payload;
     try {
         payload = (await request.json());
@@ -48,6 +52,12 @@ export async function createPhotoHandler(request, context) {
     const locationError = assertMaxLength(location, 120, 'location');
     if (locationError)
         return badRequest(locationError);
+    const creatorName = payload.creatorName?.trim();
+    if (creatorName) {
+        const nameError = assertMaxLength(creatorName, 80, 'creatorName');
+        if (nameError)
+            return badRequest(nameError);
+    }
     const created = photoStore.createPhoto(payload);
     return jsonResponse(201, created);
 }

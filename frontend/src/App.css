@@ -304,10 +304,61 @@ textarea {
 
 .search-row {
   margin-bottom: 1rem;
+  display: grid;
+  gap: 0.35rem;
 }
 
 .search-row input {
   width: 100%;
+}
+
+.photo-tag-blocks {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.tag-row.suggested-tags {
+  margin-bottom: 0;
+}
+
+.tag-row-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-right: 0.15rem;
+  flex: 0 0 auto;
+}
+
+.tag-pill {
+  display: inline-block;
+  font-size: 0.78rem;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  color: var(--text-primary);
+}
+
+.tag-pill-user {
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.tag-pill-suggested {
+  border: 1px solid rgba(78, 205, 196, 0.55);
+  background: rgba(78, 205, 196, 0.14);
+}
+
+.photo-card .photo-tag-blocks {
+  margin-top: 0.35rem;
 }
 
 .photo-open {

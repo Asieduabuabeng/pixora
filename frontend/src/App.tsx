@@ -10,8 +10,50 @@ import {
   ratePhotoApi,
   unlikePhoto,
   uploadPhoto,
+  type PixoraClientContext,
 } from './services/photosApi'
 import type { NewPhotoInput, Photo, Role } from './types'
+
+function makeUserId(rawEmail: string): string {
+  const slug = rawEmail
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 100)
+  return `u_${slug || 'user'}`
+}
+
+/** Curated tags plus metadata-derived suggestions from the API. */
+function PhotoTagBlocks({ photo }: { photo: Pick<Photo, 'tags' | 'aiTags'> }) {
+  const hasUser = photo.tags.length > 0
+  const hasAi = photo.aiTags.length > 0
+  if (!hasUser && !hasAi) return null
+  return (
+    <div className="photo-tag-blocks">
+      {hasUser ? (
+        <div className="tag-row" aria-label="Photo tags">
+          <span className="tag-row-label">Tags</span>
+          {photo.tags.map((tag) => (
+            <span key={tag} className="tag-pill tag-pill-user">
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {hasAi ? (
+        <div className="tag-row suggested-tags" aria-label="Suggested tags">
+          <span className="tag-row-label">Suggested</span>
+          {photo.aiTags.map((tag) => (
+            <span key={tag} className="tag-pill tag-pill-suggested">
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 function App() {
   const [role, setRole] = useState<Role>('creator')
@@ -103,6 +145,15 @@ function App() {
     [photos, selectedPhotoId],
   )
 
+  const pixoraContext = useMemo((): PixoraClientContext | null => {
+    if (!email.trim()) return null
+    return {
+      role,
+      userId: makeUserId(email),
+      displayName: email.split('@')[0] || 'User',
+    }
+  }, [email, role])
+
   const handleLogin = () => {
     if (!email.trim() || !password.trim()) {
       setAuthMessage('Enter your email and password to continue.')
@@ -156,12 +207,25 @@ function App() {
       return
     }
 
+    if (!pixoraContext) {
+      setStatus('Sign in as a creator to upload.')
+      return
+    }
+    if (pixoraContext.role !== 'creator') {
+      setStatus('Choose creator role at sign-in to upload.')
+      return
+    }
+
     setIsUploading(true)
     try {
-      const created = await uploadPhoto({
-        ...uploadData,
-        imageUrl: selectedImagePreview,
-      })
+      const created = await uploadPhoto(
+        {
+          ...uploadData,
+          imageUrl: selectedImagePreview,
+          creatorName: pixoraContext.displayName,
+        },
+        pixoraContext,
+      )
       const withImage: Photo = {
         ...created,
         imageUrl: selectedImagePreview ?? created.imageUrl,
@@ -190,8 +254,17 @@ function App() {
     const target = photos.find((photo) => photo.id === photoId)
     if (!target) return
 
+    if (!pixoraContext) {
+      setStatus('Sign in as a consumer to like photos.')
+      return
+    }
+    if (pixoraContext.role !== 'consumer') {
+      setStatus('Liking requires consumer role.')
+      return
+    }
+
     setPendingLikePhotoId(photoId)
-    const request = target.liked ? unlikePhoto(target) : likePhoto(target)
+    const request = target.liked ? unlikePhoto(target, pixoraContext) : likePhoto(target, pixoraContext)
     void request
       .then((result) => {
         setPhotos((current) =>
@@ -215,12 +288,21 @@ function App() {
     const target = photos.find((photo) => photo.id === photoId)
     if (!target) return
 
+    if (!pixoraContext) {
+      setStatus('Sign in as a consumer to rate photos.')
+      return
+    }
+    if (pixoraContext.role !== 'consumer') {
+      setStatus('Ratings require consumer role.')
+      return
+    }
+
     setPendingRatingPhotoId(photoId)
     setPhotos((current) =>
       current.map((photo) => (photo.id === photoId ? { ...photo, rating } : photo)),
     )
 
-    void ratePhotoApi(target, rating)
+    void ratePhotoApi(target, rating, pixoraContext)
       .then((ratingAvg) => {
         setPhotos((current) =>
           current.map((photo) =>
@@ -240,6 +322,14 @@ function App() {
   const submitComment = () => {
     const message = commentText.trim()
     if (!message || !selectedPhotoId) return
+    if (!pixoraContext) {
+      setStatus('Sign in as a consumer to comment.')
+      return
+    }
+    if (pixoraContext.role !== 'consumer') {
+      setStatus('Comments require consumer role.')
+      return
+    }
     const targetPhotoId = selectedPhotoId
     const target = photos.find((photo) => photo.id === targetPhotoId)
     if (!target) return
@@ -259,7 +349,7 @@ function App() {
     )
     setCommentText('')
     setIsSubmittingComment(true)
-    void createPhotoComment(target, message, author)
+    void createPhotoComment(target, message, author, pixoraContext)
       .then((comments) => {
         setPhotos((current) =>
           current.map((photo) =>
@@ -520,6 +610,7 @@ function App() {
                       )}
                       <strong>{photo.title}</strong>
                       <small>{photo.location}</small>
+                      <PhotoTagBlocks photo={photo} />
                     </article>
                   ))}
                 </div>
@@ -529,9 +620,12 @@ function App() {
             <div className="page-body">
               <div className="search-row">
                 <input
-                  placeholder="Search by creator, title, caption, location, tags"
+                  type="search"
+                  placeholder="Search by title, creator, caption, location, or tags"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
+                  aria-label="Search photos"
+                  autoComplete="off"
                 />
               </div>
               {photosError ? <p className="support">{photosError}</p> : null}
@@ -568,6 +662,7 @@ function App() {
                     <p>{photo.caption}</p>
                     <small>By {photo.creatorName}</small>
                     <small>{photo.location}</small>
+                    <PhotoTagBlocks photo={photo} />
                     <div className="card-actions">
                       <button
                         type="button"
@@ -634,6 +729,7 @@ function App() {
             <small>
               By {selectedPhoto.creatorName} · {selectedPhoto.location}
             </small>
+            <PhotoTagBlocks photo={selectedPhoto} />
             <div className="modal-comments">
               <h3>Comments</h3>
               {selectedPhoto.comments.length ? (

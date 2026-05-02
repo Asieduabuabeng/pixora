@@ -18,13 +18,18 @@ Azure Functions backend with a clean modular structure designed for a staged mov
 - `GET /api/photos/{photoId}`
 - `POST /api/photos`
   - Required: `title`, `caption`, `location`, `imageUrl`
+  - Headers: `X-Pixora-Role: creator`; optional body field `creatorName`
+  - Response includes `aiTags` (keyword-derived suggestions from title/caption/location)
 - `GET /api/photos/{photoId}/comments`
 - `POST /api/photos/{photoId}/comments`
   - Required: `text`
+  - Headers: `X-Pixora-Role: consumer`, `X-Pixora-Display-Name`
 - `PUT /api/photos/{photoId}/rating`
   - Required: `rating` (1 to 5)
+  - Headers: `X-Pixora-Role: consumer`, `X-Pixora-User-Id`
 - `POST /api/photos/{photoId}/like`
 - `DELETE /api/photos/{photoId}/like`
+  - Headers for rating/likes: `X-Pixora-Role: consumer`, `X-Pixora-User-Id`
 
 ## Run locally
 
@@ -36,6 +41,12 @@ Azure Functions backend with a clean modular structure designed for a staged mov
    - `func start`
 
 > Azure Functions Core Tools (`func`) must be installed globally to run the host.
+
+## Coursework-oriented features
+
+- **Lightweight AI tags:** `src/lib/aiTags.ts` suggests searchable tags from metadata (no external API).
+- **Role checks:** write endpoints require `X-Pixora-Role` (`creator` vs `consumer`) plus stable `X-Pixora-User-Id` for consumer engagement (demo-grade RBAC; not Azure AD).
+- **Observability:** handlers run inside `timedHandler` — duration and status in logs / Application Insights.
 
 ## Current storage behavior
 

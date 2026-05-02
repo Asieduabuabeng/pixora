@@ -25,6 +25,8 @@ export interface NewPhotoInput {
   location: string
   people: string
   imageUrl: string
+  /** Sent to API as creator display name (searchable). */
+  creatorName?: string
 }
 
 export interface CommentItem {

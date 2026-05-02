@@ -5,7 +5,8 @@ import type {
 } from '@azure/functions'
 import { photoStore } from '../data/photoStore.js'
 import type { CreatePhotoRequest } from '../domain/types.js'
-import { badRequest, jsonResponse, notFound } from '../lib/http.js'
+import { badRequest, forbidden, jsonResponse, notFound } from '../lib/http.js'
+import { getPixoraRole } from '../lib/securityHeaders.js'
 import { assertMaxLength, parseSafeLimit } from '../lib/validation.js'
 
 export async function getPhotosHandler(
@@ -41,6 +42,12 @@ export async function createPhotoHandler(
 ): Promise<HttpResponseInit> {
   context.log(`POST /photos called: ${request.url}`)
 
+  if (getPixoraRole(request) !== 'creator') {
+    return forbidden(
+      'Uploads require the creator role. Send header X-Pixora-Role: creator.',
+    )
+  }
+
   let payload: CreatePhotoRequest
   try {
     payload = (await request.json()) as CreatePhotoRequest
@@ -67,6 +74,12 @@ export async function createPhotoHandler(
   if (captionError) return badRequest(captionError)
   const locationError = assertMaxLength(location, 120, 'location')
   if (locationError) return badRequest(locationError)
+
+  const creatorName = payload.creatorName?.trim()
+  if (creatorName) {
+    const nameError = assertMaxLength(creatorName, 80, 'creatorName')
+    if (nameError) return badRequest(nameError)
+  }
 
   const created = photoStore.createPhoto(payload)
   return jsonResponse(201, created)

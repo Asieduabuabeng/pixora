@@ -32,6 +32,8 @@ export interface CreatePhotoRequest {
   people?: string[]
   imageUrl?: string
   tags?: string[]
+  /** Shown in gallery; must be sent by authenticated creator client. */
+  creatorName?: string
 }
 
 export interface CreateCommentRequest {
