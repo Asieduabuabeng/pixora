@@ -38,10 +38,12 @@ export async function putRatingHandler(request, context) {
     const updated = photoStore.putRating(photoId, userId, rating);
     if (!updated)
         return notFound('Photo not found.');
+    const yourRating = updated.ratingsByUser[userId] ?? 0;
     return jsonResponse(200, {
         id: updated.id,
         ratingAvg: updated.ratingAvg,
         ratingCount: updated.ratingCount,
+        yourRating,
     });
 }
 export async function addLikeHandler(request, context) {

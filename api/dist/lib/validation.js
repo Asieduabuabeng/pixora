@@ -18,8 +18,12 @@ export function validateCommentText(text) {
 }
 export function validateRating(ratingInput) {
     const rating = Number(ratingInput);
-    if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
-        return { value: null, error: 'rating must be a number between 1 and 5.' };
+    if (!Number.isFinite(rating)) {
+        return { value: null, error: 'rating must be a number between 0 and 5.' };
     }
-    return { value: rating, error: null };
+    /** 0 clears the signed-in user’s rating; 1–5 sets it. */
+    if (rating === 0 || (rating >= 1 && rating <= 5)) {
+        return { value: rating, error: null };
+    }
+    return { value: null, error: 'rating must be 0 (clear) or between 1 and 5.' };
 }

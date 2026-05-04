@@ -51,4 +51,8 @@ test('putRating updates average and count by unique user', () => {
     assert.ok(overwritten);
     assert.equal(overwritten.ratingCount, 9);
     assert.equal(overwritten.ratingAvg, 4.1);
+    const cleared = store.putRating(photoId, 'u_new_rater', 0);
+    assert.ok(cleared);
+    assert.equal(cleared.ratingCount, 8);
+    assert.equal(cleared.ratingsByUser.u_new_rater, undefined);
 });

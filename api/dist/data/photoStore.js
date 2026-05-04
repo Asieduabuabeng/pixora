@@ -294,7 +294,12 @@ export class PhotoStore {
         const photo = this.getById(photoId);
         if (!photo)
             return null;
-        photo.ratingsByUser[userId] = rating;
+        if (rating === 0) {
+            delete photo.ratingsByUser[userId];
+        }
+        else {
+            photo.ratingsByUser[userId] = rating;
+        }
         const values = Object.values(photo.ratingsByUser);
         const total = values.reduce((sum, value) => sum + value, 0);
         photo.ratingCount = values.length;

@@ -13,7 +13,10 @@ export interface Photo {
   placeholder: string
   imageUrl?: string
   likes: number
+  /** Community average (1–5 scale). */
   rating: number
+  /** Current user’s stars when known (from API); null = no rating from this user. */
+  myRating?: number | null
   liked?: boolean
   comments: CommentItem[]
   commentsCount?: number

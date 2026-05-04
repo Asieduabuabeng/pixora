@@ -20,3 +20,13 @@ test('suggestAiTags picks urban and nighttime when keywords match', () => {
   assert.ok(tags.includes('urban'))
   assert.ok(tags.includes('nighttime'))
 })
+
+test('suggestAiTags adds defaults when no keyword matches', () => {
+  const tags = suggestAiTags({
+    title: '📸',
+    caption: '!!!',
+    location: 'Here',
+  })
+  assert.ok(tags.includes('moments'))
+  assert.ok(tags.includes('photo'))
+})

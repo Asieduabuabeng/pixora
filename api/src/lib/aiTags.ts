@@ -62,5 +62,10 @@ export function suggestAiTags(parts: {
     }
   }
 
+  /** When nothing matched (short caption, emoji-only, etc.), still return helpful defaults. */
+  if (out.length === 0 && blob.trim().length > 0) {
+    out.push('moments', 'photo')
+  }
+
   return out
 }

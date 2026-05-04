@@ -4,10 +4,28 @@ import type {
   InvocationContext,
 } from '@azure/functions'
 import { photoStore } from '../data/photoStore.js'
-import type { CreatePhotoRequest } from '../domain/types.js'
+import type { CreatePhotoRequest, Photo } from '../domain/types.js'
 import { badRequest, forbidden, jsonResponse, notFound } from '../lib/http.js'
-import { getPixoraRole } from '../lib/securityHeaders.js'
+import { getPixoraRole, getPixoraUserId } from '../lib/securityHeaders.js'
 import { assertMaxLength, parseSafeLimit } from '../lib/validation.js'
+
+/** Public list shape: no raw `ratingsByUser` / `likedBy`; optional viewer-specific fields. */
+function toPhotoListItem(photo: Photo, viewerUserId?: string) {
+  const { ratingsByUser, likedBy, ...rest } = photo
+  const yourRating =
+    viewerUserId !== undefined && viewerUserId !== ''
+      ? (ratingsByUser[viewerUserId] ?? null)
+      : null
+  const liked =
+    viewerUserId !== undefined && viewerUserId !== ''
+      ? likedBy.includes(viewerUserId)
+      : false
+  return {
+    ...rest,
+    yourRating,
+    liked,
+  }
+}
 
 export async function getPhotosHandler(
   request: HttpRequest,
@@ -16,7 +34,10 @@ export async function getPhotosHandler(
   context.log(`GET /photos called: ${request.url}`)
   const limit = parseSafeLimit(request.query.get('limit') ?? undefined)
   const q = request.query.get('q') ?? ''
-  const items = photoStore.listPhotos({ q, limit })
+  const viewerUserId = getPixoraUserId(request)
+  const items = photoStore
+    .listPhotos({ q, limit })
+    .map((photo) => toPhotoListItem(photo, viewerUserId))
 
   return jsonResponse(200, {
     items,

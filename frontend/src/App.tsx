@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { KeyboardEvent } from 'react'
 import './App.css'
@@ -22,6 +22,12 @@ function makeUserId(rawEmail: string): string {
     .replace(/^_+|_+$/g, '')
     .slice(0, 100)
   return `u_${slug || 'user'}`
+}
+
+/** Stars reflect your vote when set; otherwise the community average (rounded). */
+function ratingStarsFilled(photo: Pick<Photo, 'myRating' | 'rating'>): number {
+  if (photo.myRating != null && photo.myRating > 0) return photo.myRating
+  return Math.min(5, Math.max(0, Math.round(photo.rating)))
 }
 
 /** Curated tags plus metadata-derived suggestions from the API. */
@@ -87,13 +93,30 @@ function App() {
   const [pendingLikePhotoId, setPendingLikePhotoId] = useState<number | null>(null)
   const [pendingRatingPhotoId, setPendingRatingPhotoId] = useState<number | null>(null)
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const myUploadsRef = useRef<HTMLDivElement | null>(null)
+
+  const pixoraContext = useMemo((): PixoraClientContext | null => {
+    if (!email.trim()) return null
+    return {
+      role,
+      userId: makeUserId(email),
+      displayName: email.split('@')[0] || 'User',
+    }
+  }, [email, role])
+
+  /** Only send identity headers to GET /photos after sign-in (not while typing on login). */
+  const photosFetchContext = useMemo(() => {
+    if (view !== 'consumer' && view !== 'creator') return null
+    return pixoraContext
+  }, [view, pixoraContext])
 
   useEffect(() => {
     const loadPhotos = async () => {
       setIsLoadingPhotos(true)
       setPhotosError('')
       try {
-        const items = await listPhotos()
+        const items = await listPhotos(photosFetchContext)
         setPhotos(items)
       } catch {
         setPhotosError('We could not refresh photos right now.')
@@ -103,7 +126,7 @@ function App() {
       }
     }
     void loadPhotos()
-  }, [])
+  }, [photosFetchContext])
 
   useEffect(() => {
     if (!status) return
@@ -144,15 +167,6 @@ function App() {
     () => photos.find((photo) => photo.id === selectedPhotoId) ?? null,
     [photos, selectedPhotoId],
   )
-
-  const pixoraContext = useMemo((): PixoraClientContext | null => {
-    if (!email.trim()) return null
-    return {
-      role,
-      userId: makeUserId(email),
-      displayName: email.split('@')[0] || 'User',
-    }
-  }, [email, role])
 
   const handleLogin = () => {
     if (!email.trim() || !password.trim()) {
@@ -217,6 +231,7 @@ function App() {
     }
 
     setIsUploading(true)
+    const previewUrl = selectedImagePreview
     try {
       const created = await uploadPhoto(
         {
@@ -226,15 +241,42 @@ function App() {
         },
         pixoraContext,
       )
-      const withImage: Photo = {
-        ...created,
-        imageUrl: selectedImagePreview ?? created.imageUrl,
-      }
-      setPhotos((current) => [withImage, ...current])
       setUploadData({ title: '', location: '', caption: '', people: '', imageUrl: '' })
       setSelectedImage(null)
       setSelectedImagePreview(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+
+      const apiConfigured = Boolean(import.meta.env.VITE_API_BASE_URL)
+      if (apiConfigured) {
+        try {
+          const fresh = await listPhotos(photosFetchContext)
+          const id = created.apiId
+          setPhotos(
+            fresh.map((p) =>
+              id && p.apiId === id ? { ...p, imageUrl: previewUrl ?? p.imageUrl } : p,
+            ),
+          )
+        } catch {
+          const withImage: Photo = {
+            ...created,
+            imageUrl: previewUrl ?? created.imageUrl,
+          }
+          setPhotos((current) => [withImage, ...current])
+        }
+      } else {
+        const withImage: Photo = {
+          ...created,
+          imageUrl: previewUrl ?? created.imageUrl,
+        }
+        setPhotos((current) => [withImage, ...current])
+      }
+
       setStatus('Photo uploaded successfully.')
+      requestAnimationFrame(() => {
+        myUploadsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     } catch {
       setStatus('Upload failed. Please try again.')
     } finally {
@@ -284,7 +326,7 @@ function App() {
       })
   }
 
-  const ratePhoto = (photoId: number, rating: number) => {
+  const ratePhoto = (photoId: number, star: number) => {
     const target = photos.find((photo) => photo.id === photoId)
     if (!target) return
 
@@ -297,16 +339,34 @@ function App() {
       return
     }
 
+    /** Click the same star again to remove your rating. */
+    const wantsClear =
+      target.myRating != null && target.myRating > 0 && target.myRating === star
+    const valueToSend = wantsClear ? 0 : star
+
     setPendingRatingPhotoId(photoId)
     setPhotos((current) =>
-      current.map((photo) => (photo.id === photoId ? { ...photo, rating } : photo)),
+      current.map((photo) =>
+        photo.id === photoId
+          ? {
+              ...photo,
+              myRating: valueToSend === 0 ? null : valueToSend,
+            }
+          : photo,
+      ),
     )
 
-    void ratePhotoApi(target, rating, pixoraContext)
-      .then((ratingAvg) => {
+    void ratePhotoApi(target, valueToSend, pixoraContext)
+      .then(({ ratingAvg, yourRating }) => {
         setPhotos((current) =>
           current.map((photo) =>
-            photo.id === photoId ? { ...photo, rating: ratingAvg } : photo,
+            photo.id === photoId
+              ? {
+                  ...photo,
+                  rating: ratingAvg,
+                  myRating: yourRating === 0 ? null : yourRating,
+                }
+              : photo,
           ),
         )
       })
@@ -548,6 +608,7 @@ function App() {
                 <label>
                   Image
                   <input
+                    ref={fileInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     onChange={(event) => handleImageSelection(event.target.files?.[0] ?? null)}
@@ -597,7 +658,7 @@ function App() {
                   {isUploading ? 'Uploading...' : 'Upload'}
                 </button>
               </form>
-              <div className="card">
+              <div className="card" ref={myUploadsRef}>
                 <h2>My uploads</h2>
                 <p className="support">{photos.length} photos</p>
                 <div className="photo-grid">
@@ -690,7 +751,7 @@ function App() {
                           <button
                             key={star}
                             type="button"
-                            className={`star-btn ${star <= Math.round(photo.rating) ? 'on' : ''}`}
+                            className={`star-btn ${star <= ratingStarsFilled(photo) ? 'on' : ''}`}
                             disabled={pendingRatingPhotoId === photo.id}
                             onClick={(event) => {
                               event.stopPropagation()

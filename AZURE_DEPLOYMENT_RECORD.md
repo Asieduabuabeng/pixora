@@ -52,8 +52,15 @@ func azure functionapp publish pixora-api-asiedu001 --typescript
 
 ## Application Insights
 
+There is **no separate public URL** for Application Insights like the static site. You open it in the **Azure Portal** (signed in with the same subscription as the project).
+
 - **Name:** `pixora-api-asiedu001` (created with the Function App)
-- **Portal:** Azure Portal → Resource group → Application Insights → Overview / Logs
+- **How to open:** [Azure Portal](https://portal.azure.com) → **Resource groups** → **`rg-pixora-com769`** → open the **Application Insights** resource (type *Application Insights* in the group list if you do not see the name immediately) → **Overview** for charts, or **Live Metrics** / **Logs** for live or query data.
+- **Bookmark for recording:** On the Application Insights **Overview** page, your browser address bar is a **deep link** to that resource (you can copy it; it includes your subscription ID and is only useful when you are logged into that tenant).
+
+### Quick portal shortcut (after login)
+
+**Portal → search bar:** type `pixora-api-asiedu001` or `rg-pixora-com769` → select the resource group → click **Application Insights**.
 
 ## Frontend (production)
 

@@ -20,6 +20,9 @@ interface ApiPhoto {
   likesCount?: number
   commentsCount?: number
   ratingAvg?: number
+  /** Present when request sends X-Pixora-User-Id (per-user rating for stars UI). */
+  yourRating?: number | null
+  liked?: boolean
 }
 
 interface ApiPhotosResponse {
@@ -37,6 +40,8 @@ interface ApiLikeResponse {
 
 interface ApiRatingResponse {
   ratingAvg: number
+  ratingCount?: number
+  yourRating: number
 }
 
 const samplePhotos: Photo[] = [
@@ -197,6 +202,9 @@ async function getApiErrorMessage(response: Response, fallback: string): Promise
 }
 
 function toUiPhoto(apiPhoto: ApiPhoto): Photo {
+  const myRating =
+    apiPhoto.yourRating === undefined ? undefined : apiPhoto.yourRating === null ? null : apiPhoto.yourRating
+
   return {
     id: Number.parseInt(apiPhoto.id.replace(/\D/g, ''), 10) || Date.now(),
     apiId: apiPhoto.id,
@@ -211,6 +219,8 @@ function toUiPhoto(apiPhoto: ApiPhoto): Photo {
     imageUrl: apiPhoto.imageUrl,
     likes: apiPhoto.likesCount ?? 0,
     rating: apiPhoto.ratingAvg ?? 0,
+    myRating,
+    liked: apiPhoto.liked,
     commentsCount: apiPhoto.commentsCount ?? 0,
     comments: [],
   }
@@ -235,12 +245,19 @@ function mutatingHeaders(
   return headers
 }
 
-export async function listPhotos(): Promise<Photo[]> {
+export async function listPhotos(ctx?: PixoraClientContext | null): Promise<Photo[]> {
   if (!API_BASE_URL) {
     return Promise.resolve(samplePhotos)
   }
 
-  const response = await fetch(`${API_BASE_URL}/photos`)
+  const headers: Record<string, string> = {}
+  if (ctx?.userId?.trim()) {
+    headers['X-Pixora-Role'] = ctx.role
+    headers['X-Pixora-User-Id'] = ctx.userId
+    headers['X-Pixora-Display-Name'] = ctx.displayName
+  }
+
+  const response = await fetch(`${API_BASE_URL}/photos`, { headers })
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response, 'Failed to load photos'))
   }
@@ -373,9 +390,9 @@ export async function ratePhotoApi(
   photo: Photo,
   rating: number,
   ctx: PixoraClientContext,
-): Promise<number> {
+): Promise<{ ratingAvg: number; yourRating: number }> {
   if (!API_BASE_URL) {
-    return Promise.resolve(rating)
+    return { ratingAvg: photo.rating, yourRating: rating }
   }
 
   const response = await fetch(`${API_BASE_URL}/photos/${encodeURIComponent(getApiPhotoId(photo))}/rating`, {
@@ -388,5 +405,8 @@ export async function ratePhotoApi(
   }
 
   const data = (await response.json()) as ApiRatingResponse
-  return data.ratingAvg
+  return {
+    ratingAvg: data.ratingAvg,
+    yourRating: data.yourRating ?? 0,
+  }
 }
